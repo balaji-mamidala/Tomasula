@@ -1,0 +1,96 @@
+﻿Clock++
+
+1. FU –-→ Result bus –-→  Reg file + Schedule queue  (Status UP for inst that was moved from FU to result bus)
+
+Find instruction in FU that has ready=0 and has least clock. If clock is same then the instruction that has least tag.
+If any result bus is ready. Put the tag, reg# for that instruction in FU into the result bus. Update ready bit of result bus to 0.
+For that instruction in FU, set ready=1, tag=-1, clock=-1, reg=-1
+
+
+For all result buses check if ready = 0 then do
+In reg file index using reg# in result bus. If tag matches, in reg file set tag=-1, ready=1.
+In SchedQ, search all src tags which match tag in result bus. Mark those src ready as 1 and src tag as -1. Set recent bit 1 for all those instructions. 
+In SchedQ, search all dest tags which match tag in result bus. Mark complete bit for those instructions as 1. Set recent bit as 1.
+
+
+
+2.  SchedQ –-→ FU  (Executed for inst that was moved from SchedQ to FU)
+
+Start from top of SchedQ (oldest instruction with source reg and FU ready gets fired first)
+
+For each I in SchedQ
+If(Src1.ready==true && Src2.ready==true && FU available && I.recent!=true && I.Fired!=true)
+Copy dest reg#, dest reg tag to the corresponding FU. Set clock for FU as current clock cycle. Make ready=0
+Mark Inst as fired=1 in SchedQ.
+
+
+3. DispQ to SchedQ (Scheduled  for inst that was moved from DispQ to SchedQ)
+
+Start from top of DispQ (oldest instruction from DispQ gets scheduled first)
+
+Check if SchedQ is not full (has an empty slot) i.e. check if size of SchedQ is less than 2(k0+k1+k2)
+
+
+If SchedQ is not full && DispQ is not empty do
+
+	If -1 != Disp.Src1Reg#	
+	if Regs[Disp.Src1Reg#].ready != true
+		SchedQ.scr1ready = false
+		SchedQ.scr1tag =  Regs[Disp.Src1Reg#].tag
+	else
+		SchedQ.scr1ready = true
+		SchedQ.scr1tag =  -1
+else
+	SchedQ.scr1ready = true
+	SchedQ.scr1tag =  -1
+
+
+
+
+If -1 != Disp.Src2Reg#	
+	if Regs[Disp.Src2Reg#].ready != true
+		SchedQ.scr2ready = false
+		SchedQ.scr2tag =  Regs[Disp.Src2Reg#].tag
+	else
+		SchedQ.scr2ready = true
+		SchedQ.scr2tag =  -1
+else
+	SchedQ.scr1ready = true
+	SchedQ.scr1tag =  -1	
+	
+	SchedQ.desttag = DispQ.inst#
+	SchedQ.destreg# = DispQ.destreg#
+		
+	SchedQ.FU = DispQ.FU
+	SchedQ.complete = false
+	SchedQ.fired = false
+	SchedQ.recent = false
+
+	Regs[DispQ.dest#].ready = 0;
+	Regs[DispQ.dest#].tag = DispQ.inst#;
+	
+Pop_front dispatch queue to remove the copied entry from DispQ. We dont care about this as the DispQ is infinte in size.
+
+
+4. FetchQ to DispQ (Dispatched  for inst that was moved from FetchQ to DispQ)
+
+Start from top of FetchQ (oldest instruction from FetchQ gets dispatched first)
+
+Push top of FetchQ to bottom on DispQ.
+Pop_front FetchQ to remove the entry
+
+
+5. Intr file to FetchQ (Fetched  for inst that was moved from Instr file to FetchQ)
+
+Copy F instructions to FetchQ in program order. Ensure to have Inst#.
+
+
+If recent!=true for all completed instructions remove them from SchedQ i.e. use Erase fuction of vector
+
+Reset all recent bits in SchedQ to false.
+
+Reset tag=-1, ready=1, reg#-1 for all result buses.
+
+While(! (inst trace complete && schedQ empty && DispQ empty && fetchQ empty) ) do all above
+
+
